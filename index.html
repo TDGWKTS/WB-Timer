@@ -68,6 +68,11 @@
             background-color: #f8f9fa;
         }
         
+        tr.active-row {
+            background-color: #e3f2fd !important;
+            box-shadow: 0 0 0 1px #2196f3;
+        }
+        
         input {
             width: 100%;
             padding: 8px 10px;
@@ -301,6 +306,9 @@
                     inTimeInput.value = '00:00';
                     inTimeInput.style.borderColor = '#27ae60';
                     
+                    // Update active row highlighting
+                    updateActiveRowHighlighting();
+                    
                     // Focus on vehicle number (this will open keyboard)
                     const vehicleInput = targetRow.querySelector('.vehicle-number');
                     setTimeout(() => {
@@ -335,6 +343,9 @@
                     timeEnterBtn.classList.remove('out-time-mode');
                     timeEnterBtn.classList.add('running');
                     
+                    // Update active row highlighting
+                    updateActiveRowHighlighting();
+                    
                     // Focus on IN TIME of next row without opening keyboard
                     const nextRow = rows[currentActiveRow];
                     if (nextRow) {
@@ -357,6 +368,10 @@
                         const newRow = addNewRow();
                         currentActiveRow = rowCount - 1;
                         const newInTimeInput = newRow.querySelector('.in-time');
+                        
+                        // Update active row highlighting
+                        updateActiveRowHighlighting();
+                        
                         setTimeout(() => {
                             newInTimeInput.blur();
                             newInTimeInput.style.backgroundColor = '#f0f8ff';
@@ -382,19 +397,14 @@
                     inTimeInput.value = currentTime;
                     inTimeInput.style.borderColor = '#27ae60';
                     
-                    // Remove focus to prevent keyboard
+                    // Update active row highlighting
+                    updateActiveRowHighlighting();
+                    
+                    // Focus on vehicle number for current row
+                    const vehicleInput = targetRow.querySelector('.vehicle-number');
                     setTimeout(() => {
-                        inTimeInput.blur();
-                        // Add visual feedback
-                        inTimeInput.style.backgroundColor = '#f0f8ff';
-                        inTimeInput.style.boxShadow = '0 0 5px rgba(52, 152, 219, 0.3)';
-                        
-                        // Remove visual feedback after 1 second
-                        setTimeout(() => {
-                            inTimeInput.style.backgroundColor = '';
-                            inTimeInput.style.boxShadow = '';
-                        }, 1000);
-                    }, 50);
+                        vehicleInput.focus();
+                    }, 100);
                     
                     currentInputMode = 'out-time';
                     timeEnterBtn.textContent = 'RECORD OUT TIME';
@@ -404,6 +414,28 @@
                 
                 // Auto-save after time entry
                 autoSave();
+            }
+            
+            // Function to update active row highlighting
+            function updateActiveRowHighlighting() {
+                const rows = tableBody.querySelectorAll('tr');
+                
+                // Remove active class from all rows
+                rows.forEach(row => {
+                    row.classList.remove('active-row');
+                });
+                
+                // Add active class to current active row
+                if (rows[currentActiveRow]) {
+                    rows[currentActiveRow].classList.add('active-row');
+                    
+                    // Scroll to make the active row visible
+                    rows[currentActiveRow].scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'center',
+                        inline: 'nearest'
+                    });
+                }
             }
             
             // Function to start the timer
@@ -478,6 +510,17 @@
                         input.addEventListener('input', calculateDuration);
                         input.addEventListener('input', autoSave);
                         input.addEventListener('input', checkAndAddRows);
+                        input.addEventListener('focus', function() {
+                            // Update active row when user focuses on a vehicle number
+                            const rows = tableBody.querySelectorAll('tr');
+                            for (let i = 0; i < rows.length; i++) {
+                                if (rows[i].contains(this)) {
+                                    currentActiveRow = i;
+                                    updateActiveRowHighlighting();
+                                    break;
+                                }
+                            }
+                        });
                     } else {
                         // Time inputs are read-only and won't trigger keyboard
                         input.addEventListener('click', function() {
