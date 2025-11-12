@@ -75,6 +75,7 @@
             border-radius: 4px;
             font-size: 1rem;
             min-height: 38px;
+            background-color: white;
         }
         
         input:focus {
@@ -91,6 +92,14 @@
             font-size: 1rem;
             text-align: center;
             font-family: 'Courier New', monospace;
+            /* Prevent keyboard on focus for time inputs */
+            caret-color: transparent;
+        }
+        
+        .time-input:focus {
+            /* Visual feedback without keyboard */
+            background-color: #f0f8ff;
+            box-shadow: 0 0 5px rgba(52, 152, 219, 0.3);
         }
         
         .total-time {
@@ -193,6 +202,13 @@
             font-weight: bold;
             font-family: 'Courier New', monospace;
         }
+        
+        /* Hide spin buttons for number inputs */
+        input[type="text"]::-webkit-outer-spin-button,
+        input[type="text"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
     </style>
 </head>
 <body>
@@ -285,9 +301,11 @@
                     inTimeInput.value = '00:00';
                     inTimeInput.style.borderColor = '#27ae60';
                     
-                    // Focus on vehicle number
+                    // Focus on vehicle number (this will open keyboard)
                     const vehicleInput = targetRow.querySelector('.vehicle-number');
-                    vehicleInput.focus();
+                    setTimeout(() => {
+                        vehicleInput.focus();
+                    }, 100);
                     
                     currentInputMode = 'out-time';
                     timeEnterBtn.textContent = 'RECORD OUT TIME';
@@ -317,17 +335,38 @@
                     timeEnterBtn.classList.remove('out-time-mode');
                     timeEnterBtn.classList.add('running');
                     
-                    // Focus on IN TIME of next row directly (skip vehicle number)
+                    // Focus on IN TIME of next row without opening keyboard
                     const nextRow = rows[currentActiveRow];
                     if (nextRow) {
                         const nextInTimeInput = nextRow.querySelector('.in-time');
-                        nextInTimeInput.focus();
+                        // Use blur to remove focus from any input
+                        setTimeout(() => {
+                            nextInTimeInput.blur();
+                            // Add visual feedback instead of focus
+                            nextInTimeInput.style.backgroundColor = '#f0f8ff';
+                            nextInTimeInput.style.boxShadow = '0 0 5px rgba(52, 152, 219, 0.3)';
+                            
+                            // Remove visual feedback after 1 second
+                            setTimeout(() => {
+                                nextInTimeInput.style.backgroundColor = '';
+                                nextInTimeInput.style.boxShadow = '';
+                            }, 1000);
+                        }, 50);
                     } else {
                         // Add new row if needed
                         const newRow = addNewRow();
                         currentActiveRow = rowCount - 1;
                         const newInTimeInput = newRow.querySelector('.in-time');
-                        newInTimeInput.focus();
+                        setTimeout(() => {
+                            newInTimeInput.blur();
+                            newInTimeInput.style.backgroundColor = '#f0f8ff';
+                            newInTimeInput.style.boxShadow = '0 0 5px rgba(52, 152, 219, 0.3)';
+                            
+                            setTimeout(() => {
+                                newInTimeInput.style.backgroundColor = '';
+                                newInTimeInput.style.boxShadow = '';
+                            }, 1000);
+                        }, 50);
                     }
                     
                 } else if (currentInputMode === 'in-time') {
@@ -343,7 +382,19 @@
                     inTimeInput.value = currentTime;
                     inTimeInput.style.borderColor = '#27ae60';
                     
-                    // Focus stays on IN TIME input (user can manually go to vehicle number if needed)
+                    // Remove focus to prevent keyboard
+                    setTimeout(() => {
+                        inTimeInput.blur();
+                        // Add visual feedback
+                        inTimeInput.style.backgroundColor = '#f0f8ff';
+                        inTimeInput.style.boxShadow = '0 0 5px rgba(52, 152, 219, 0.3)';
+                        
+                        // Remove visual feedback after 1 second
+                        setTimeout(() => {
+                            inTimeInput.style.backgroundColor = '';
+                            inTimeInput.style.boxShadow = '';
+                        }, 1000);
+                    }, 50);
                     
                     currentInputMode = 'out-time';
                     timeEnterBtn.textContent = 'RECORD OUT TIME';
@@ -409,10 +460,10 @@
                                oninput="this.value = this.value.toUpperCase()">
                     </td>
                     <td>
-                        <input type="text" class="in-time time-input" placeholder="mm:ss" maxlength="5">
+                        <input type="text" class="in-time time-input" placeholder="mm:ss" maxlength="5" readonly>
                     </td>
                     <td>
-                        <input type="text" class="out-time time-input" placeholder="mm:ss" maxlength="5">
+                        <input type="text" class="out-time time-input" placeholder="mm:ss" maxlength="5" readonly>
                     </td>
                     <td class="total-time">--:--</td>
                 `;
@@ -422,9 +473,29 @@
                 // Add event listeners to the new inputs
                 const inputs = row.querySelectorAll('input');
                 inputs.forEach(input => {
-                    input.addEventListener('input', calculateDuration);
-                    input.addEventListener('input', autoSave);
-                    input.addEventListener('input', checkAndAddRows);
+                    if (input.classList.contains('vehicle-number')) {
+                        // Only vehicle number should be editable and focusable
+                        input.addEventListener('input', calculateDuration);
+                        input.addEventListener('input', autoSave);
+                        input.addEventListener('input', checkAndAddRows);
+                    } else {
+                        // Time inputs are read-only and won't trigger keyboard
+                        input.addEventListener('click', function() {
+                            // Allow manual editing if user specifically clicks on time input
+                            this.removeAttribute('readonly');
+                            this.focus();
+                        });
+                        
+                        input.addEventListener('blur', function() {
+                            // Make read-only again when losing focus
+                            this.setAttribute('readonly', true);
+                            calculateDuration();
+                            autoSave();
+                        });
+                        
+                        input.addEventListener('input', calculateDuration);
+                        input.addEventListener('input', autoSave);
+                    }
                 });
                 
                 return row;
