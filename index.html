@@ -39,8 +39,12 @@
         .table-container {
             overflow-x: auto;
             margin-bottom: 10px;
-            max-height: 55vh;
+            height: 55vh;
             overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         
         table {
@@ -62,6 +66,7 @@
             font-weight: 600;
             color: #2c3e50;
             font-size: 0.8rem;
+            z-index: 10;
         }
         
         tr:nth-child(even) {
@@ -97,12 +102,14 @@
             font-size: 1rem;
             text-align: center;
             font-family: 'Courier New', monospace;
-            /* Prevent keyboard on focus for time inputs */
             caret-color: transparent;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
         }
         
         .time-input:focus {
-            /* Visual feedback without keyboard */
             background-color: #f0f8ff;
             box-shadow: 0 0 5px rgba(52, 152, 219, 0.3);
         }
@@ -208,11 +215,25 @@
             font-family: 'Courier New', monospace;
         }
         
+        .row-count-info {
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 0.8rem;
+            margin-bottom: 8px;
+        }
+        
         /* Hide spin buttons for number inputs */
         input[type="text"]::-webkit-outer-spin-button,
         input[type="text"]::-webkit-inner-spin-button {
             -webkit-appearance: none;
             margin: 0;
+        }
+        
+        /* Prevent zoom on iOS for inputs */
+        @media screen and (max-width: 768px) {
+            input {
+                font-size: 16px; /* Prevents zoom on iOS */
+            }
         }
     </style>
 </head>
@@ -221,6 +242,8 @@
         <h1>Vehicle Time Recording</h1>
         <p class="description">Click to record each time entry</p>
     </header>
+    
+    <div class="row-count-info" id="rowCountInfo">Total records: 0</div>
     
     <div class="table-container">
         <table id="vehicleTable">
@@ -263,178 +286,249 @@
             const timeEnterBtn = document.getElementById('timeEnterBtn');
             const stopwatchDisplay = document.getElementById('stopwatchDisplay');
             const lastSavedSpan = document.getElementById('lastSaved');
+            const rowCountInfo = document.getElementById('rowCountInfo');
             
             let rowCount = 0;
             const maxRows = 90;
-            const initialVisibleRows = 6;
-            const bufferRows = 2;
+            const visibleRows = 5; // Always show latest 5 records
             let currentInputMode = 'start'; // start, out-time, in-time
-            let currentActiveRow = 0;
+            let currentRowIndex = 0; // Track which row we're currently working on
             let timerStartTime = null;
             let timerInterval = null;
             let elapsedSeconds = 0;
+            let allRowsData = []; // Store all row data
             
-            // Load saved data from localStorage
-            loadSavedData();
+            // Initialize with empty rows
+            initializeTable();
             
             // Add event listeners
             clearAllBtn.addEventListener('click', clearAllData);
             exportBtn.addEventListener('click', exportToExcel);
             timeEnterBtn.addEventListener('click', handleTimeEnter);
             
+            // Function to initialize table with empty rows
+            function initializeTable() {
+                // Add initial empty rows
+                for (let i = 0; i < visibleRows; i++) {
+                    addNewRow();
+                }
+                refreshTableDisplay();
+            }
+            
             // Function to handle time enter button click
             function handleTimeEnter() {
-                const rows = tableBody.querySelectorAll('tr');
-                
                 if (currentInputMode === 'start') {
                     // Start the timer AND record first vehicle IN time as 00:00
                     startTimer();
                     
-                    // Create first row and record IN time as 00:00
-                    if (rows.length === 0) {
-                        addNewRow();
-                    }
-                    
-                    let targetRow = rows[currentActiveRow];
-                    if (!targetRow) {
-                        targetRow = addNewRow();
-                        currentActiveRow = rowCount - 1;
-                    }
-                    
-                    // Set FIRST IN time as 00:00
-                    const inTimeInput = targetRow.querySelector('.in-time');
-                    inTimeInput.value = '00:00';
-                    inTimeInput.style.borderColor = '#27ae60';
-                    
-                    // Update active row highlighting
-                    updateActiveRowHighlighting();
-                    
-                    // Focus on vehicle number (this will open keyboard)
-                    const vehicleInput = targetRow.querySelector('.vehicle-number');
-                    setTimeout(() => {
-                        vehicleInput.focus();
-                    }, 100);
+                    // Set FIRST IN time as 00:00 for the first row
+                    allRowsData[0].inTime = '00:00';
+                    allRowsData[0].duration = '--:--';
                     
                     currentInputMode = 'out-time';
                     timeEnterBtn.textContent = 'RECORD OUT TIME';
                     timeEnterBtn.classList.remove('running');
                     timeEnterBtn.classList.add('out-time-mode');
                     
+                    // Refresh display to show the updated first row
+                    refreshTableDisplay();
+                    
                 } else if (currentInputMode === 'out-time') {
                     // Record OUT time for current vehicle
-                    const targetRow = rows[currentActiveRow];
-                    if (!targetRow) return;
-                    
-                    // Get current timer time in mm:ss
                     const currentTime = formatTimerTime(elapsedSeconds);
                     
-                    // Set OUT time
-                    const outTimeInput = targetRow.querySelector('.out-time');
-                    outTimeInput.value = currentTime;
-                    outTimeInput.style.borderColor = '#27ae60';
+                    // Update the current row's out time
+                    allRowsData[currentRowIndex].outTime = currentTime;
                     
                     // Calculate duration
-                    calculateDuration();
+                    calculateDurationForRow(currentRowIndex);
                     
-                    // Move to next row and switch to in-time mode
-                    currentActiveRow++;
+                    // Move to next row for IN time
+                    currentRowIndex++;
+                    
+                    // If we need a new row, add it
+                    if (currentRowIndex >= rowCount) {
+                        addNewRow();
+                    }
+                    
                     currentInputMode = 'in-time';
                     timeEnterBtn.textContent = 'RECORD IN TIME';
                     timeEnterBtn.classList.remove('out-time-mode');
                     timeEnterBtn.classList.add('running');
                     
-                    // Update active row highlighting
-                    updateActiveRowHighlighting();
-                    
-                    // Focus on IN TIME of next row without opening keyboard
-                    const nextRow = rows[currentActiveRow];
-                    if (nextRow) {
-                        const nextInTimeInput = nextRow.querySelector('.in-time');
-                        // Use blur to remove focus from any input
-                        setTimeout(() => {
-                            nextInTimeInput.blur();
-                            // Add visual feedback instead of focus
-                            nextInTimeInput.style.backgroundColor = '#f0f8ff';
-                            nextInTimeInput.style.boxShadow = '0 0 5px rgba(52, 152, 219, 0.3)';
-                            
-                            // Remove visual feedback after 1 second
-                            setTimeout(() => {
-                                nextInTimeInput.style.backgroundColor = '';
-                                nextInTimeInput.style.boxShadow = '';
-                            }, 1000);
-                        }, 50);
-                    } else {
-                        // Add new row if needed
-                        const newRow = addNewRow();
-                        currentActiveRow = rowCount - 1;
-                        const newInTimeInput = newRow.querySelector('.in-time');
-                        
-                        // Update active row highlighting
-                        updateActiveRowHighlighting();
-                        
-                        setTimeout(() => {
-                            newInTimeInput.blur();
-                            newInTimeInput.style.backgroundColor = '#f0f8ff';
-                            newInTimeInput.style.boxShadow = '0 0 5px rgba(52, 152, 219, 0.3)';
-                            
-                            setTimeout(() => {
-                                newInTimeInput.style.backgroundColor = '';
-                                newInTimeInput.style.boxShadow = '';
-                            }, 1000);
-                        }, 50);
-                    }
+                    // Refresh display to show the new active row
+                    refreshTableDisplay();
                     
                 } else if (currentInputMode === 'in-time') {
-                    // Record IN time for next vehicle
-                    const targetRow = rows[currentActiveRow];
-                    if (!targetRow) return;
-                    
-                    // Get current timer time in mm:ss
+                    // Record IN time for current vehicle
                     const currentTime = formatTimerTime(elapsedSeconds);
                     
-                    // Set IN time
-                    const inTimeInput = targetRow.querySelector('.in-time');
-                    inTimeInput.value = currentTime;
-                    inTimeInput.style.borderColor = '#27ae60';
-                    
-                    // Update active row highlighting
-                    updateActiveRowHighlighting();
-                    
-                    // Focus on vehicle number for current row
-                    const vehicleInput = targetRow.querySelector('.vehicle-number');
-                    setTimeout(() => {
-                        vehicleInput.focus();
-                    }, 100);
+                    // Update the current row's in time
+                    allRowsData[currentRowIndex].inTime = currentTime;
+                    allRowsData[currentRowIndex].duration = '--:--';
                     
                     currentInputMode = 'out-time';
                     timeEnterBtn.textContent = 'RECORD OUT TIME';
                     timeEnterBtn.classList.remove('running');
                     timeEnterBtn.classList.add('out-time-mode');
+                    
+                    // Refresh display to show the updated row
+                    refreshTableDisplay();
                 }
                 
                 // Auto-save after time entry
                 autoSave();
             }
             
-            // Function to update active row highlighting
-            function updateActiveRowHighlighting() {
-                const rows = tableBody.querySelectorAll('tr');
+            // Function to add a new row to data storage
+            function addNewRow() {
+                if (rowCount >= maxRows) {
+                    alert('Maximum number of rows reached!');
+                    return;
+                }
                 
-                // Remove active class from all rows
-                rows.forEach(row => {
-                    row.classList.remove('active-row');
+                allRowsData.push({
+                    vehicleNumber: '',
+                    inTime: '',
+                    outTime: '',
+                    duration: '--:--'
                 });
                 
-                // Add active class to current active row
-                if (rows[currentActiveRow]) {
-                    rows[currentActiveRow].classList.add('active-row');
+                rowCount++;
+                rowCountInfo.textContent = `Total records: ${rowCount}`;
+            }
+            
+            // Function to refresh table display (show only latest 5 records)
+            function refreshTableDisplay() {
+                // Clear the table body
+                tableBody.innerHTML = '';
+                
+                // Calculate which rows to show (latest 5, or all if less than 5)
+                const startIndex = Math.max(0, rowCount - visibleRows);
+                const endIndex = rowCount;
+                
+                // Add rows to table (only the ones we want to show)
+                for (let i = startIndex; i < endIndex; i++) {
+                    const rowData = allRowsData[i];
+                    const row = document.createElement('tr');
                     
-                    // Scroll to make the active row visible
-                    rows[currentActiveRow].scrollIntoView({ 
-                        behavior: 'smooth', 
-                        block: 'center',
-                        inline: 'nearest'
-                    });
+                    // Highlight if this is the current active row
+                    if (i === currentRowIndex) {
+                        row.classList.add('active-row');
+                    }
+                    
+                    row.innerHTML = `
+                        <td>${i + 1}</td>
+                        <td>
+                            <input type="text" class="vehicle-number" placeholder="ABC1234" 
+                                   value="${rowData.vehicleNumber}" 
+                                   oninput="this.value = this.value.toUpperCase()" readonly>
+                        </td>
+                        <td>
+                            <input type="text" class="in-time time-input" placeholder="mm:ss" 
+                                   value="${rowData.inTime}" maxlength="5" readonly>
+                        </td>
+                        <td>
+                            <input type="text" class="out-time time-input" placeholder="mm:ss" 
+                                   value="${rowData.outTime}" maxlength="5" readonly>
+                        </td>
+                        <td class="total-time">${rowData.duration}</td>
+                    `;
+                    
+                    tableBody.appendChild(row);
+                    
+                    // Add event listeners to the inputs
+                    addInputEventListeners(row, i);
+                }
+                
+                // Auto-scroll to show the current active row
+                const tableContainer = document.querySelector('.table-container');
+                setTimeout(() => {
+                    const activeRow = tableBody.querySelector('.active-row');
+                    if (activeRow) {
+                        activeRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    } else {
+                        tableContainer.scrollTop = tableContainer.scrollHeight;
+                    }
+                }, 100);
+            }
+            
+            // Function to add event listeners to input fields
+            function addInputEventListeners(row, rowIndex) {
+                const vehicleInput = row.querySelector('.vehicle-number');
+                const inTimeInput = row.querySelector('.in-time');
+                const outTimeInput = row.querySelector('.out-time');
+                
+                // Vehicle number input
+                vehicleInput.addEventListener('click', function() {
+                    this.removeAttribute('readonly');
+                    this.focus();
+                });
+                
+                vehicleInput.addEventListener('blur', function() {
+                    this.setAttribute('readonly', true);
+                    allRowsData[rowIndex].vehicleNumber = this.value;
+                    autoSave();
+                });
+                
+                // In time input
+                inTimeInput.addEventListener('click', function() {
+                    this.removeAttribute('readonly');
+                    this.focus();
+                });
+                
+                inTimeInput.addEventListener('blur', function() {
+                    this.setAttribute('readonly', true);
+                    allRowsData[rowIndex].inTime = this.value;
+                    calculateDurationForRow(rowIndex);
+                    autoSave();
+                    refreshTableDisplay();
+                });
+                
+                // Out time input
+                outTimeInput.addEventListener('click', function() {
+                    this.removeAttribute('readonly');
+                    this.focus();
+                });
+                
+                outTimeInput.addEventListener('blur', function() {
+                    this.setAttribute('readonly', true);
+                    allRowsData[rowIndex].outTime = this.value;
+                    calculateDurationForRow(rowIndex);
+                    autoSave();
+                    refreshTableDisplay();
+                });
+            }
+            
+            // Function to calculate duration for a specific row
+            function calculateDurationForRow(rowIndex) {
+                const rowData = allRowsData[rowIndex];
+                const inTime = rowData.inTime;
+                const outTime = rowData.outTime;
+                
+                if (inTime && outTime) {
+                    // Validate time format (mm:ss or hh:mm:ss)
+                    const timeRegex = /^([0-9]{1,2}):([0-5][0-9])$/;
+                    const timeRegexWithHours = /^([0-9]{1,2}):([0-5][0-9]):([0-5][0-9])$/;
+                    
+                    const isValidTime = timeRegex.test(inTime) || timeRegexWithHours.test(inTime);
+                    const isValidOutTime = timeRegex.test(outTime) || timeRegexWithHours.test(outTime);
+                    
+                    if (isValidTime && isValidOutTime) {
+                        const inSeconds = timeToSeconds(inTime);
+                        const outSeconds = timeToSeconds(outTime);
+                        
+                        if (outSeconds >= inSeconds) {
+                            const durationSeconds = outSeconds - inSeconds;
+                            rowData.duration = formatDurationTime(durationSeconds);
+                        } else {
+                            rowData.duration = 'Invalid';
+                        }
+                    } else {
+                        rowData.duration = '--:--';
+                    }
+                } else {
+                    rowData.duration = '--:--';
                 }
             }
             
@@ -476,127 +570,6 @@
                 }
             }
             
-            // Function to add a new row
-            function addNewRow() {
-                if (rowCount >= maxRows) {
-                    return;
-                }
-                
-                const row = document.createElement('tr');
-                rowCount++;
-                
-                row.innerHTML = `
-                    <td>${rowCount}</td>
-                    <td>
-                        <input type="text" class="vehicle-number" placeholder="ABC1234" 
-                               oninput="this.value = this.value.toUpperCase()">
-                    </td>
-                    <td>
-                        <input type="text" class="in-time time-input" placeholder="mm:ss" maxlength="5" readonly>
-                    </td>
-                    <td>
-                        <input type="text" class="out-time time-input" placeholder="mm:ss" maxlength="5" readonly>
-                    </td>
-                    <td class="total-time">--:--</td>
-                `;
-                
-                tableBody.appendChild(row);
-                
-                // Add event listeners to the new inputs
-                const inputs = row.querySelectorAll('input');
-                inputs.forEach(input => {
-                    if (input.classList.contains('vehicle-number')) {
-                        // Only vehicle number should be editable and focusable
-                        input.addEventListener('input', calculateDuration);
-                        input.addEventListener('input', autoSave);
-                        input.addEventListener('input', checkAndAddRows);
-                        input.addEventListener('focus', function() {
-                            // Update active row when user focuses on a vehicle number
-                            const rows = tableBody.querySelectorAll('tr');
-                            for (let i = 0; i < rows.length; i++) {
-                                if (rows[i].contains(this)) {
-                                    currentActiveRow = i;
-                                    updateActiveRowHighlighting();
-                                    break;
-                                }
-                            }
-                        });
-                    } else {
-                        // Time inputs are read-only and won't trigger keyboard
-                        input.addEventListener('click', function() {
-                            // Allow manual editing if user specifically clicks on time input
-                            this.removeAttribute('readonly');
-                            this.focus();
-                        });
-                        
-                        input.addEventListener('blur', function() {
-                            // Make read-only again when losing focus
-                            this.setAttribute('readonly', true);
-                            calculateDuration();
-                            autoSave();
-                        });
-                        
-                        input.addEventListener('input', calculateDuration);
-                        input.addEventListener('input', autoSave);
-                    }
-                });
-                
-                return row;
-            }
-            
-            // Function to calculate duration
-            function calculateDuration() {
-                const rows = tableBody.querySelectorAll('tr');
-                
-                rows.forEach(row => {
-                    const inTimeInput = row.querySelector('.in-time');
-                    const outTimeInput = row.querySelector('.out-time');
-                    const totalTimeCell = row.querySelector('.total-time');
-                    
-                    const inTime = inTimeInput.value;
-                    const outTime = outTimeInput.value;
-                    
-                    // Reset duration
-                    totalTimeCell.textContent = '--:--';
-                    
-                    // Validate time format (mm:ss or hh:mm:ss)
-                    const timeRegex = /^([0-9]{1,2}):([0-5][0-9])$/;
-                    const timeRegexWithHours = /^([0-9]{1,2}):([0-5][0-9]):([0-5][0-9])$/;
-                    
-                    const isValidTime = timeRegex.test(inTime) || timeRegexWithHours.test(inTime);
-                    const isValidOutTime = timeRegex.test(outTime) || timeRegexWithHours.test(outTime);
-                    
-                    if (inTime && !isValidTime) {
-                        inTimeInput.style.borderColor = '#e74c3c';
-                        return;
-                    } else {
-                        inTimeInput.style.borderColor = inTime ? '#27ae60' : '#ddd';
-                    }
-                    
-                    if (outTime && !isValidOutTime) {
-                        outTimeInput.style.borderColor = '#e74c3c';
-                        return;
-                    } else {
-                        outTimeInput.style.borderColor = outTime ? '#27ae60' : '#ddd';
-                    }
-                    
-                    // Calculate duration if both times are valid
-                    if (inTime && outTime && isValidTime && isValidOutTime) {
-                        const inSeconds = timeToSeconds(inTime);
-                        const outSeconds = timeToSeconds(outTime);
-                        
-                        if (outSeconds < inSeconds) {
-                            outTimeInput.style.borderColor = '#e74c3c';
-                            return;
-                        }
-                        
-                        const durationSeconds = outSeconds - inSeconds;
-                        totalTimeCell.textContent = formatDurationTime(durationSeconds);
-                        outTimeInput.style.borderColor = '#27ae60';
-                    }
-                });
-            }
-            
             // Function to convert time string to seconds
             function timeToSeconds(timeStr) {
                 const parts = timeStr.split(':');
@@ -611,50 +584,11 @@
                 }
             }
             
-            // Function to check if we need to add more rows
-            function checkAndAddRows() {
-                const rows = tableBody.querySelectorAll('tr');
-                const lastRowIndex = rows.length - 1;
-                
-                // Count how many of the last bufferRows rows have data
-                let filledBufferRows = 0;
-                for (let i = Math.max(0, lastRowIndex - bufferRows + 1); i <= lastRowIndex; i++) {
-                    const row = rows[i];
-                    const vehicleNumber = row.querySelector('.vehicle-number').value;
-                    const inTime = row.querySelector('.in-time').value;
-                    const outTime = row.querySelector('.out-time').value;
-                    
-                    if (vehicleNumber || inTime || outTime) {
-                        filledBufferRows++;
-                    }
-                }
-                
-                // If buffer rows are filled, add a new row
-                if (filledBufferRows >= bufferRows && rowCount < maxRows) {
-                    addNewRow();
-                }
-            }
-            
             // Function to auto-save data to localStorage
             function autoSave() {
-                const rows = tableBody.querySelectorAll('tr');
-                const data = [];
-                
-                rows.forEach(row => {
-                    const vehicleNumber = row.querySelector('.vehicle-number').value;
-                    const inTime = row.querySelector('.in-time').value;
-                    const outTime = row.querySelector('.out-time').value;
-                    
-                    if (vehicleNumber || inTime || outTime) {
-                        data.push({
-                            vehicleNumber,
-                            inTime,
-                            outTime
-                        });
-                    }
-                });
-                
-                localStorage.setItem('vehicleTimeData', JSON.stringify(data));
+                localStorage.setItem('vehicleTimeData', JSON.stringify(allRowsData));
+                localStorage.setItem('vehicleTimeRowCount', rowCount.toString());
+                localStorage.setItem('vehicleTimeCurrentRow', currentRowIndex.toString());
                 localStorage.setItem('vehicleTimeLastSaved', new Date().toLocaleString());
                 
                 // Update last saved timestamp
@@ -664,38 +598,45 @@
             // Function to load saved data from localStorage
             function loadSavedData() {
                 const savedData = localStorage.getItem('vehicleTimeData');
+                const savedRowCount = localStorage.getItem('vehicleTimeRowCount');
+                const savedCurrentRow = localStorage.getItem('vehicleTimeCurrentRow');
                 const lastSaved = localStorage.getItem('vehicleTimeLastSaved');
                 
-                if (savedData) {
-                    const data = JSON.parse(savedData);
-                    
-                    data.forEach(item => {
-                        const row = addNewRow();
-                        row.querySelector('.vehicle-number').value = item.vehicleNumber;
-                        row.querySelector('.in-time').value = item.inTime;
-                        row.querySelector('.out-time').value = item.outTime;
-                    });
-                    
-                    // Add empty rows to maintain the buffer
-                    const currentRows = tableBody.querySelectorAll('tr').length;
-                    const rowsToAdd = Math.max(0, initialVisibleRows - currentRows);
-                    
-                    for (let i = 0; i < rowsToAdd; i++) {
-                        addNewRow();
-                    }
+                if (savedData && savedRowCount) {
+                    allRowsData = JSON.parse(savedData);
+                    rowCount = parseInt(savedRowCount);
+                    currentRowIndex = savedCurrentRow ? parseInt(savedCurrentRow) : 0;
                     
                     if (lastSaved) {
                         lastSavedSpan.textContent = lastSaved;
                     }
                     
-                    calculateDuration();
-                } else {
-                    // Add initial empty rows
-                    for (let i = 0; i < initialVisibleRows; i++) {
-                        addNewRow();
+                    refreshTableDisplay();
+                    rowCountInfo.textContent = `Total records: ${rowCount}`;
+                    
+                    // Set appropriate mode based on existing data
+                    if (rowCount > 0) {
+                        const currentRow = allRowsData[currentRowIndex];
+                        if (currentRow.inTime && !currentRow.outTime) {
+                            currentInputMode = 'out-time';
+                            timeEnterBtn.textContent = 'RECORD OUT TIME';
+                            timeEnterBtn.classList.add('out-time-mode');
+                        } else {
+                            currentInputMode = 'in-time';
+                            timeEnterBtn.textContent = 'RECORD IN TIME';
+                            timeEnterBtn.classList.add('running');
+                        }
+                        
+                        // Start timer if we have existing data
+                        if (!timerInterval) {
+                            startTimer();
+                        }
                     }
                 }
             }
+            
+            // Call load saved data
+            loadSavedData();
             
             // Function to clear all data
             function clearAllData() {
@@ -707,41 +648,44 @@
                     }
                     
                     tableBody.innerHTML = '';
+                    allRowsData = [];
                     rowCount = 0;
-                    currentActiveRow = 0;
+                    currentRowIndex = 0;
                     currentInputMode = 'start';
                     timeEnterBtn.textContent = 'START & RECORD FIRST IN TIME (00:00)';
                     timeEnterBtn.classList.remove('out-time-mode', 'running', 'in-time-mode');
                     stopwatchDisplay.textContent = '00:00';
+                    rowCountInfo.textContent = 'Total records: 0';
+                    
                     localStorage.removeItem('vehicleTimeData');
+                    localStorage.removeItem('vehicleTimeRowCount');
+                    localStorage.removeItem('vehicleTimeCurrentRow');
                     localStorage.removeItem('vehicleTimeLastSaved');
                     lastSavedSpan.textContent = 'Never';
                     
-                    // Add initial empty rows
-                    for (let i = 0; i < initialVisibleRows; i++) {
-                        addNewRow();
-                    }
+                    // Re-initialize with empty rows
+                    initializeTable();
                 }
             }
             
             // Function to export data to Excel
             function exportToExcel() {
-                const rows = tableBody.querySelectorAll('tr');
                 const data = [];
                 
                 // Add headers
-                data.push(['Vehicle Number', 'In Time', 'Out Time', 'Duration']);
+                data.push(['#', 'Vehicle Number', 'In Time', 'Out Time', 'Duration']);
                 
-                // Add data rows
-                rows.forEach(row => {
-                    const vehicleNumber = row.querySelector('.vehicle-number').value || '';
-                    const inTime = row.querySelector('.in-time').value || '';
-                    const outTime = row.querySelector('.out-time').value || '';
-                    const totalTime = row.querySelector('.total-time').textContent || '';
-                    
-                    // Skip empty rows
-                    if (vehicleNumber || inTime || outTime) {
-                        data.push([vehicleNumber, inTime, outTime, totalTime]);
+                // Add data rows (all rows)
+                allRowsData.forEach((rowData, index) => {
+                    // Skip completely empty rows
+                    if (rowData.vehicleNumber || rowData.inTime || rowData.outTime) {
+                        data.push([
+                            index + 1,
+                            rowData.vehicleNumber,
+                            rowData.inTime,
+                            rowData.outTime,
+                            rowData.duration
+                        ]);
                     }
                 });
                 
