@@ -39,7 +39,7 @@
         .table-container {
             overflow-x: auto;
             margin-bottom: 10px;
-            height: 55vh;
+            max-height: 55vh;
             overflow-y: auto;
             border: 1px solid #e0e0e0;
             border-radius: 8px;
@@ -290,7 +290,6 @@
             
             let rowCount = 0;
             const maxRows = 90;
-            const visibleRows = 5; // Always show latest 5 records
             let currentInputMode = 'start'; // start, out-time, in-time
             let currentRowIndex = 0; // Track which row we're currently working on
             let timerStartTime = null;
@@ -309,7 +308,7 @@
             // Function to initialize table with empty rows
             function initializeTable() {
                 // Add initial empty rows
-                for (let i = 0; i < visibleRows; i++) {
+                for (let i = 0; i < 10; i++) {
                     addNewRow();
                 }
                 refreshTableDisplay();
@@ -398,17 +397,13 @@
                 rowCountInfo.textContent = `Total records: ${rowCount}`;
             }
             
-            // Function to refresh table display (show only latest 5 records)
+            // Function to refresh table display (show ALL records)
             function refreshTableDisplay() {
                 // Clear the table body
                 tableBody.innerHTML = '';
                 
-                // Calculate which rows to show (latest 5, or all if less than 5)
-                const startIndex = Math.max(0, rowCount - visibleRows);
-                const endIndex = rowCount;
-                
-                // Add rows to table (only the ones we want to show)
-                for (let i = startIndex; i < endIndex; i++) {
+                // Add ALL rows to table
+                for (let i = 0; i < rowCount; i++) {
                     const rowData = allRowsData[i];
                     const row = document.createElement('tr');
                     
@@ -447,8 +442,6 @@
                     const activeRow = tableBody.querySelector('.active-row');
                     if (activeRow) {
                         activeRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    } else {
-                        tableContainer.scrollTop = tableContainer.scrollHeight;
                     }
                 }, 100);
             }
