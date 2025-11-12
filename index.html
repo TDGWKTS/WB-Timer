@@ -70,10 +70,11 @@
         
         input {
             width: 100%;
-            padding: 6px 8px;
+            padding: 8px 10px;
             border: 1px solid #ddd;
             border-radius: 4px;
-            font-size: 0.9rem;
+            font-size: 1rem;
+            min-height: 38px;
         }
         
         input:focus {
@@ -83,12 +84,21 @@
         
         .vehicle-number {
             text-transform: uppercase;
+            font-size: 1rem;
+        }
+        
+        .time-input {
+            font-size: 1rem;
+            text-align: center;
+            font-family: 'Courier New', monospace;
         }
         
         .total-time {
             font-weight: bold;
             color: #2c3e50;
-            font-size: 0.85rem;
+            font-size: 0.9rem;
+            font-family: 'Courier New', monospace;
+            text-align: center;
         }
         
         .time-enter-section {
@@ -181,6 +191,7 @@
             color: #2c3e50;
             margin-bottom: 5px;
             font-weight: bold;
+            font-family: 'Courier New', monospace;
         }
     </style>
 </head>
@@ -195,10 +206,10 @@
             <thead>
                 <tr>
                     <th width="8%">#</th>
-                    <th width="27%">Vehicle No.</th>
-                    <th width="25%">In Time</th>
-                    <th width="25%">Out Time</th>
-                    <th width="15%">Duration</th>
+                    <th width="30%">Vehicle No.</th>
+                    <th width="22%">In Time</th>
+                    <th width="22%">Out Time</th>
+                    <th width="18%">Duration</th>
                 </tr>
             </thead>
             <tbody id="tableBody">
@@ -207,7 +218,7 @@
         </table>
     </div>
     
-    <div class="stopwatch-display" id="stopwatchDisplay">00:00:00</div>
+    <div class="stopwatch-display" id="stopwatchDisplay">00:00</div>
     
     <div class="time-enter-section">
         <button class="time-enter-btn" id="timeEnterBtn">START & RECORD FIRST IN TIME (00:00)</button>
@@ -269,9 +280,9 @@
                         currentActiveRow = rowCount - 1;
                     }
                     
-                    // Set FIRST IN time as 00:00:00
+                    // Set FIRST IN time as 00:00
                     const inTimeInput = targetRow.querySelector('.in-time');
-                    inTimeInput.value = '00:00:00';
+                    inTimeInput.value = '00:00';
                     inTimeInput.style.borderColor = '#27ae60';
                     
                     // Focus on vehicle number
@@ -288,7 +299,7 @@
                     const targetRow = rows[currentActiveRow];
                     if (!targetRow) return;
                     
-                    // Get current timer time
+                    // Get current timer time in mm:ss
                     const currentTime = formatTimerTime(elapsedSeconds);
                     
                     // Set OUT time
@@ -306,17 +317,17 @@
                     timeEnterBtn.classList.remove('out-time-mode');
                     timeEnterBtn.classList.add('running');
                     
-                    // Focus on vehicle number of next row
+                    // Focus on IN TIME of next row directly (skip vehicle number)
                     const nextRow = rows[currentActiveRow];
                     if (nextRow) {
-                        const nextVehicleInput = nextRow.querySelector('.vehicle-number');
-                        nextVehicleInput.focus();
+                        const nextInTimeInput = nextRow.querySelector('.in-time');
+                        nextInTimeInput.focus();
                     } else {
                         // Add new row if needed
-                        addNewRow();
+                        const newRow = addNewRow();
                         currentActiveRow = rowCount - 1;
-                        const newVehicleInput = tableBody.lastChild.querySelector('.vehicle-number');
-                        newVehicleInput.focus();
+                        const newInTimeInput = newRow.querySelector('.in-time');
+                        newInTimeInput.focus();
                     }
                     
                 } else if (currentInputMode === 'in-time') {
@@ -324,7 +335,7 @@
                     const targetRow = rows[currentActiveRow];
                     if (!targetRow) return;
                     
-                    // Get current timer time
+                    // Get current timer time in mm:ss
                     const currentTime = formatTimerTime(elapsedSeconds);
                     
                     // Set IN time
@@ -332,9 +343,7 @@
                     inTimeInput.value = currentTime;
                     inTimeInput.style.borderColor = '#27ae60';
                     
-                    // Focus on vehicle number
-                    const vehicleInput = targetRow.querySelector('.vehicle-number');
-                    vehicleInput.focus();
+                    // Focus stays on IN TIME input (user can manually go to vehicle number if needed)
                     
                     currentInputMode = 'out-time';
                     timeEnterBtn.textContent = 'RECORD OUT TIME';
@@ -350,7 +359,7 @@
             function startTimer() {
                 timerStartTime = Date.now();
                 elapsedSeconds = 0;
-                stopwatchDisplay.textContent = '00:00:00';
+                stopwatchDisplay.textContent = '00:00';
                 
                 timerInterval = setInterval(() => {
                     elapsedSeconds = Math.floor((Date.now() - timerStartTime) / 1000);
@@ -358,13 +367,30 @@
                 }, 1000);
             }
             
-            // Function to format seconds into hh:mm:ss
+            // Function to format seconds into mm:ss (default) or hh:mm:ss if over 60 minutes
             function formatTimerTime(totalSeconds) {
                 const hours = Math.floor(totalSeconds / 3600);
                 const minutes = Math.floor((totalSeconds % 3600) / 60);
                 const seconds = totalSeconds % 60;
                 
-                return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                if (hours > 0) {
+                    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                } else {
+                    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                }
+            }
+            
+            // Function to format duration in mm:ss or hh:mm:ss
+            function formatDurationTime(totalSeconds) {
+                const hours = Math.floor(totalSeconds / 3600);
+                const minutes = Math.floor((totalSeconds % 3600) / 60);
+                const seconds = totalSeconds % 60;
+                
+                if (hours > 0) {
+                    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                } else {
+                    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                }
             }
             
             // Function to add a new row
@@ -383,12 +409,12 @@
                                oninput="this.value = this.value.toUpperCase()">
                     </td>
                     <td>
-                        <input type="text" class="in-time" placeholder="hh:mm:ss" maxlength="8">
+                        <input type="text" class="in-time time-input" placeholder="mm:ss" maxlength="5">
                     </td>
                     <td>
-                        <input type="text" class="out-time" placeholder="hh:mm:ss" maxlength="8">
+                        <input type="text" class="out-time time-input" placeholder="mm:ss" maxlength="5">
                     </td>
-                    <td class="total-time">--:--:--</td>
+                    <td class="total-time">--:--</td>
                 `;
                 
                 tableBody.appendChild(row);
@@ -417,19 +443,23 @@
                     const outTime = outTimeInput.value;
                     
                     // Reset duration
-                    totalTimeCell.textContent = '--:--:--';
+                    totalTimeCell.textContent = '--:--';
                     
-                    // Validate time format (hh:mm:ss)
-                    const timeRegex = /^([0-9]{2}):([0-5][0-9]):([0-5][0-9])$/;
+                    // Validate time format (mm:ss or hh:mm:ss)
+                    const timeRegex = /^([0-9]{1,2}):([0-5][0-9])$/;
+                    const timeRegexWithHours = /^([0-9]{1,2}):([0-5][0-9]):([0-5][0-9])$/;
                     
-                    if (inTime && !timeRegex.test(inTime)) {
+                    const isValidTime = timeRegex.test(inTime) || timeRegexWithHours.test(inTime);
+                    const isValidOutTime = timeRegex.test(outTime) || timeRegexWithHours.test(outTime);
+                    
+                    if (inTime && !isValidTime) {
                         inTimeInput.style.borderColor = '#e74c3c';
                         return;
                     } else {
                         inTimeInput.style.borderColor = inTime ? '#27ae60' : '#ddd';
                     }
                     
-                    if (outTime && !timeRegex.test(outTime)) {
+                    if (outTime && !isValidOutTime) {
                         outTimeInput.style.borderColor = '#e74c3c';
                         return;
                     } else {
@@ -437,7 +467,7 @@
                     }
                     
                     // Calculate duration if both times are valid
-                    if (inTime && outTime && timeRegex.test(inTime) && timeRegex.test(outTime)) {
+                    if (inTime && outTime && isValidTime && isValidOutTime) {
                         const inSeconds = timeToSeconds(inTime);
                         const outSeconds = timeToSeconds(outTime);
                         
@@ -447,16 +477,24 @@
                         }
                         
                         const durationSeconds = outSeconds - inSeconds;
-                        totalTimeCell.textContent = formatTimerTime(durationSeconds);
+                        totalTimeCell.textContent = formatDurationTime(durationSeconds);
                         outTimeInput.style.borderColor = '#27ae60';
                     }
                 });
             }
             
-            // Function to convert hh:mm:ss to seconds
+            // Function to convert time string to seconds
             function timeToSeconds(timeStr) {
-                const [hours, minutes, seconds] = timeStr.split(':').map(Number);
-                return hours * 3600 + minutes * 60 + seconds;
+                const parts = timeStr.split(':');
+                if (parts.length === 3) {
+                    // hh:mm:ss format
+                    const [hours, minutes, seconds] = parts.map(Number);
+                    return hours * 3600 + minutes * 60 + seconds;
+                } else {
+                    // mm:ss format
+                    const [minutes, seconds] = parts.map(Number);
+                    return minutes * 60 + seconds;
+                }
             }
             
             // Function to check if we need to add more rows
@@ -560,7 +598,7 @@
                     currentInputMode = 'start';
                     timeEnterBtn.textContent = 'START & RECORD FIRST IN TIME (00:00)';
                     timeEnterBtn.classList.remove('out-time-mode', 'running', 'in-time-mode');
-                    stopwatchDisplay.textContent = '00:00:00';
+                    stopwatchDisplay.textContent = '00:00';
                     localStorage.removeItem('vehicleTimeData');
                     localStorage.removeItem('vehicleTimeLastSaved');
                     lastSavedSpan.textContent = 'Never';
