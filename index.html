@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vehicle Time Recording</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f7fa;
+            color: #333;
+            line-height: 1.4;
+            padding: 8px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 15px;
+            padding: 10px 0;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            font-size: 1.4rem;
+            margin-bottom: 5px;
+        }
+        
+        .description {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+        
+        .table-container {
+            overflow-x: auto;
+            margin-bottom: 10px;
+            max-height: 55vh;
+            overflow-y: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        
+        th, td {
+            padding: 8px 6px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        th {
+            background-color: #f2f6fc;
+            position: sticky;
+            top: 0;
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 0.8rem;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        
+        input {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        
+        input:focus {
+            border-color: #3498db;
+            outline: none;
+        }
+        
+        .vehicle-number {
+            text-transform: uppercase;
+        }
+        
+        .total-time {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 0.85rem;
+        }
+        
+        .time-enter-section {
+            display: flex;
+            justify-content: center;
+            margin: 15px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .time-enter-btn {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        
+        .time-enter-btn:hover {
+            background-color: #2980b9;
+        }
+        
+        .time-enter-btn:active {
+            transform: translateY(1px);
+        }
+        
+        .time-enter-btn.out-time-mode {
+            background-color: #e67e22;
+        }
+        
+        .time-enter-btn.in-time-mode {
+            background-color: #27ae60;
+        }
+        
+        .time-enter-btn.running {
+            background-color: #e74c3c;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            padding: 10px 0;
+            gap: 10px;
+        }
+        
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            flex: 1;
+        }
+        
+        button.export {
+            background-color: #27ae60;
+        }
+        
+        button.clear {
+            background-color: #e74c3c;
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 15px;
+            color: #7f8c8d;
+            font-size: 0.8rem;
+            padding: 10px 0;
+            border-top: 1px solid #eaeaea;
+        }
+        
+        .stopwatch-display {
+            text-align: center;
+            font-size: 1.1rem;
+            color: #2c3e50;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Vehicle Time Recording</h1>
+        <p class="description">Click to record each time entry</p>
+    </header>
+    
+    <div class="table-container">
+        <table id="vehicleTable">
+            <thead>
+                <tr>
+                    <th width="8%">#</th>
+                    <th width="27%">Vehicle No.</th>
+                    <th width="25%">In Time</th>
+                    <th width="25%">Out Time</th>
+                    <th width="15%">Duration</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <!-- Rows will be generated by JavaScript -->
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="stopwatch-display" id="stopwatchDisplay">00:00:00</div>
+    
+    <div class="time-enter-section">
+        <button class="time-enter-btn" id="timeEnterBtn">START & RECORD FIRST IN TIME (00:00)</button>
+    </div>
+    
+    <div class="controls">
+        <button id="clearAll" class="clear">Clear All</button>
+        <button id="exportBtn" class="export">Export to Excel</button>
+    </div>
+    
+    <footer>
+        <p>Data is automatically saved. Last saved: <span id="lastSaved">Never</span></p>
+    </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const tableBody = document.getElementById('tableBody');
+            const clearAllBtn = document.getElementById('clearAll');
+            const exportBtn = document.getElementById('exportBtn');
+            const timeEnterBtn = document.getElementById('timeEnterBtn');
+            const stopwatchDisplay = document.getElementById('stopwatchDisplay');
+            const lastSavedSpan = document.getElementById('lastSaved');
+            
+            let rowCount = 0;
+            const maxRows = 90;
+            const initialVisibleRows = 6;
+            const bufferRows = 2;
+            let currentInputMode = 'start'; // start, out-time, in-time
+            let currentActiveRow = 0;
+            let timerStartTime = null;
+            let timerInterval = null;
+            let elapsedSeconds = 0;
+            
+            // Load saved data from localStorage
+            loadSavedData();
+            
+            // Add event listeners
+            clearAllBtn.addEventListener('click', clearAllData);
+            exportBtn.addEventListener('click', exportToExcel);
+            timeEnterBtn.addEventListener('click', handleTimeEnter);
+            
+            // Function to handle time enter button click
+            function handleTimeEnter() {
+                const rows = tableBody.querySelectorAll('tr');
+                
+                if (currentInputMode === 'start') {
+                    // Start the timer AND record first vehicle IN time as 00:00
+                    startTimer();
+                    
+                    // Create first row and record IN time as 00:00
+                    if (rows.length === 0) {
+                        addNewRow();
+                    }
+                    
+                    let targetRow = rows[currentActiveRow];
+                    if (!targetRow) {
+                        targetRow = addNewRow();
+                        currentActiveRow = rowCount - 1;
+                    }
+                    
+                    // Set FIRST IN time as 00:00:00
+                    const inTimeInput = targetRow.querySelector('.in-time');
+                    inTimeInput.value = '00:00:00';
+                    inTimeInput.style.borderColor = '#27ae60';
+                    
+                    // Focus on vehicle number
+                    const vehicleInput = targetRow.querySelector('.vehicle-number');
+                    vehicleInput.focus();
+                    
+                    currentInputMode = 'out-time';
+                    timeEnterBtn.textContent = 'RECORD OUT TIME';
+                    timeEnterBtn.classList.remove('running');
+                    timeEnterBtn.classList.add('out-time-mode');
+                    
+                } else if (currentInputMode === 'out-time') {
+                    // Record OUT time for current vehicle
+                    const targetRow = rows[currentActiveRow];
+                    if (!targetRow) return;
+                    
+                    // Get current timer time
+                    const currentTime = formatTimerTime(elapsedSeconds);
+                    
+                    // Set OUT time
+                    const outTimeInput = targetRow.querySelector('.out-time');
+                    outTimeInput.value = currentTime;
+                    outTimeInput.style.borderColor = '#27ae60';
+                    
+                    // Calculate duration
+                    calculateDuration();
+                    
+                    // Move to next row and switch to in-time mode
+                    currentActiveRow++;
+                    currentInputMode = 'in-time';
+                    timeEnterBtn.textContent = 'RECORD IN TIME';
+                    timeEnterBtn.classList.remove('out-time-mode');
+                    timeEnterBtn.classList.add('running');
+                    
+                    // Focus on vehicle number of next row
+                    const nextRow = rows[currentActiveRow];
+                    if (nextRow) {
+                        const nextVehicleInput = nextRow.querySelector('.vehicle-number');
+                        nextVehicleInput.focus();
+                    } else {
+                        // Add new row if needed
+                        addNewRow();
+                        currentActiveRow = rowCount - 1;
+                        const newVehicleInput = tableBody.lastChild.querySelector('.vehicle-number');
+                        newVehicleInput.focus();
+                    }
+                    
+                } else if (currentInputMode === 'in-time') {
+                    // Record IN time for next vehicle
+                    const targetRow = rows[currentActiveRow];
+                    if (!targetRow) return;
+                    
+                    // Get current timer time
+                    const currentTime = formatTimerTime(elapsedSeconds);
+                    
+                    // Set IN time
+                    const inTimeInput = targetRow.querySelector('.in-time');
+                    inTimeInput.value = currentTime;
+                    inTimeInput.style.borderColor = '#27ae60';
+                    
+                    // Focus on vehicle number
+                    const vehicleInput = targetRow.querySelector('.vehicle-number');
+                    vehicleInput.focus();
+                    
+                    currentInputMode = 'out-time';
+                    timeEnterBtn.textContent = 'RECORD OUT TIME';
+                    timeEnterBtn.classList.remove('running');
+                    timeEnterBtn.classList.add('out-time-mode');
+                }
+                
+                // Auto-save after time entry
+                autoSave();
+            }
+            
+            // Function to start the timer
+            function startTimer() {
+                timerStartTime = Date.now();
+                elapsedSeconds = 0;
+                stopwatchDisplay.textContent = '00:00:00';
+                
+                timerInterval = setInterval(() => {
+                    elapsedSeconds = Math.floor((Date.now() - timerStartTime) / 1000);
+                    stopwatchDisplay.textContent = formatTimerTime(elapsedSeconds);
+                }, 1000);
+            }
+            
+            // Function to format seconds into hh:mm:ss
+            function formatTimerTime(totalSeconds) {
+                const hours = Math.floor(totalSeconds / 3600);
+                const minutes = Math.floor((totalSeconds % 3600) / 60);
+                const seconds = totalSeconds % 60;
+                
+                return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
+            
+            // Function to add a new row
+            function addNewRow() {
+                if (rowCount >= maxRows) {
+                    return;
+                }
+                
+                const row = document.createElement('tr');
+                rowCount++;
+                
+                row.innerHTML = `
+                    <td>${rowCount}</td>
+                    <td>
+                        <input type="text" class="vehicle-number" placeholder="ABC1234" 
+                               oninput="this.value = this.value.toUpperCase()">
+                    </td>
+                    <td>
+                        <input type="text" class="in-time" placeholder="hh:mm:ss" maxlength="8">
+                    </td>
+                    <td>
+                        <input type="text" class="out-time" placeholder="hh:mm:ss" maxlength="8">
+                    </td>
+                    <td class="total-time">--:--:--</td>
+                `;
+                
+                tableBody.appendChild(row);
+                
+                // Add event listeners to the new inputs
+                const inputs = row.querySelectorAll('input');
+                inputs.forEach(input => {
+                    input.addEventListener('input', calculateDuration);
+                    input.addEventListener('input', autoSave);
+                    input.addEventListener('input', checkAndAddRows);
+                });
+                
+                return row;
+            }
+            
+            // Function to calculate duration
+            function calculateDuration() {
+                const rows = tableBody.querySelectorAll('tr');
+                
+                rows.forEach(row => {
+                    const inTimeInput = row.querySelector('.in-time');
+                    const outTimeInput = row.querySelector('.out-time');
+                    const totalTimeCell = row.querySelector('.total-time');
+                    
+                    const inTime = inTimeInput.value;
+                    const outTime = outTimeInput.value;
+                    
+                    // Reset duration
+                    totalTimeCell.textContent = '--:--:--';
+                    
+                    // Validate time format (hh:mm:ss)
+                    const timeRegex = /^([0-9]{2}):([0-5][0-9]):([0-5][0-9])$/;
+                    
+                    if (inTime && !timeRegex.test(inTime)) {
+                        inTimeInput.style.borderColor = '#e74c3c';
+                        return;
+                    } else {
+                        inTimeInput.style.borderColor = inTime ? '#27ae60' : '#ddd';
+                    }
+                    
+                    if (outTime && !timeRegex.test(outTime)) {
+                        outTimeInput.style.borderColor = '#e74c3c';
+                        return;
+                    } else {
+                        outTimeInput.style.borderColor = outTime ? '#27ae60' : '#ddd';
+                    }
+                    
+                    // Calculate duration if both times are valid
+                    if (inTime && outTime && timeRegex.test(inTime) && timeRegex.test(outTime)) {
+                        const inSeconds = timeToSeconds(inTime);
+                        const outSeconds = timeToSeconds(outTime);
+                        
+                        if (outSeconds < inSeconds) {
+                            outTimeInput.style.borderColor = '#e74c3c';
+                            return;
+                        }
+                        
+                        const durationSeconds = outSeconds - inSeconds;
+                        totalTimeCell.textContent = formatTimerTime(durationSeconds);
+                        outTimeInput.style.borderColor = '#27ae60';
+                    }
+                });
+            }
+            
+            // Function to convert hh:mm:ss to seconds
+            function timeToSeconds(timeStr) {
+                const [hours, minutes, seconds] = timeStr.split(':').map(Number);
+                return hours * 3600 + minutes * 60 + seconds;
+            }
+            
+            // Function to check if we need to add more rows
+            function checkAndAddRows() {
+                const rows = tableBody.querySelectorAll('tr');
+                const lastRowIndex = rows.length - 1;
+                
+                // Count how many of the last bufferRows rows have data
+                let filledBufferRows = 0;
+                for (let i = Math.max(0, lastRowIndex - bufferRows + 1); i <= lastRowIndex; i++) {
+                    const row = rows[i];
+                    const vehicleNumber = row.querySelector('.vehicle-number').value;
+                    const inTime = row.querySelector('.in-time').value;
+                    const outTime = row.querySelector('.out-time').value;
+                    
+                    if (vehicleNumber || inTime || outTime) {
+                        filledBufferRows++;
+                    }
+                }
+                
+                // If buffer rows are filled, add a new row
+                if (filledBufferRows >= bufferRows && rowCount < maxRows) {
+                    addNewRow();
+                }
+            }
+            
+            // Function to auto-save data to localStorage
+            function autoSave() {
+                const rows = tableBody.querySelectorAll('tr');
+                const data = [];
+                
+                rows.forEach(row => {
+                    const vehicleNumber = row.querySelector('.vehicle-number').value;
+                    const inTime = row.querySelector('.in-time').value;
+                    const outTime = row.querySelector('.out-time').value;
+                    
+                    if (vehicleNumber || inTime || outTime) {
+                        data.push({
+                            vehicleNumber,
+                            inTime,
+                            outTime
+                        });
+                    }
+                });
+                
+                localStorage.setItem('vehicleTimeData', JSON.stringify(data));
+                localStorage.setItem('vehicleTimeLastSaved', new Date().toLocaleString());
+                
+                // Update last saved timestamp
+                lastSavedSpan.textContent = new Date().toLocaleString();
+            }
+            
+            // Function to load saved data from localStorage
+            function loadSavedData() {
+                const savedData = localStorage.getItem('vehicleTimeData');
+                const lastSaved = localStorage.getItem('vehicleTimeLastSaved');
+                
+                if (savedData) {
+                    const data = JSON.parse(savedData);
+                    
+                    data.forEach(item => {
+                        const row = addNewRow();
+                        row.querySelector('.vehicle-number').value = item.vehicleNumber;
+                        row.querySelector('.in-time').value = item.inTime;
+                        row.querySelector('.out-time').value = item.outTime;
+                    });
+                    
+                    // Add empty rows to maintain the buffer
+                    const currentRows = tableBody.querySelectorAll('tr').length;
+                    const rowsToAdd = Math.max(0, initialVisibleRows - currentRows);
+                    
+                    for (let i = 0; i < rowsToAdd; i++) {
+                        addNewRow();
+                    }
+                    
+                    if (lastSaved) {
+                        lastSavedSpan.textContent = lastSaved;
+                    }
+                    
+                    calculateDuration();
+                } else {
+                    // Add initial empty rows
+                    for (let i = 0; i < initialVisibleRows; i++) {
+                        addNewRow();
+                    }
+                }
+            }
+            
+            // Function to clear all data
+            function clearAllData() {
+                if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
+                    // Stop timer
+                    if (timerInterval) {
+                        clearInterval(timerInterval);
+                        timerInterval = null;
+                    }
+                    
+                    tableBody.innerHTML = '';
+                    rowCount = 0;
+                    currentActiveRow = 0;
+                    currentInputMode = 'start';
+                    timeEnterBtn.textContent = 'START & RECORD FIRST IN TIME (00:00)';
+                    timeEnterBtn.classList.remove('out-time-mode', 'running', 'in-time-mode');
+                    stopwatchDisplay.textContent = '00:00:00';
+                    localStorage.removeItem('vehicleTimeData');
+                    localStorage.removeItem('vehicleTimeLastSaved');
+                    lastSavedSpan.textContent = 'Never';
+                    
+                    // Add initial empty rows
+                    for (let i = 0; i < initialVisibleRows; i++) {
+                        addNewRow();
+                    }
+                }
+            }
+            
+            // Function to export data to Excel
+            function exportToExcel() {
+                const rows = tableBody.querySelectorAll('tr');
+                const data = [];
+                
+                // Add headers
+                data.push(['Vehicle Number', 'In Time', 'Out Time', 'Duration']);
+                
+                // Add data rows
+                rows.forEach(row => {
+                    const vehicleNumber = row.querySelector('.vehicle-number').value || '';
+                    const inTime = row.querySelector('.in-time').value || '';
+                    const outTime = row.querySelector('.out-time').value || '';
+                    const totalTime = row.querySelector('.total-time').textContent || '';
+                    
+                    // Skip empty rows
+                    if (vehicleNumber || inTime || outTime) {
+                        data.push([vehicleNumber, inTime, outTime, totalTime]);
+                    }
+                });
+                
+                // Create worksheet
+                const ws = XLSX.utils.aoa_to_sheet(data);
+                
+                // Create workbook
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Vehicle Times');
+                
+                // Generate Excel file and download
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+                XLSX.writeFile(wb, `vehicle_times_${timestamp}.xlsx`);
+            }
+        });
+    </script>
+</body>
+</html>
