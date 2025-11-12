@@ -39,7 +39,7 @@
         .table-container {
             overflow-x: auto;
             margin-bottom: 10px;
-            max-height: 55vh;
+            height: 55vh;
             overflow-y: auto;
             border: 1px solid #e0e0e0;
             border-radius: 8px;
@@ -243,7 +243,7 @@
         <p class="description">Click to record each time entry</p>
     </header>
     
-    <div class="row-count-info" id="rowCountInfo">Total records: 0</div>
+    <div class="row-count-info" id="rowCountInfo">Showing latest 5 of 0 records</div>
     
     <div class="table-container">
         <table id="vehicleTable">
@@ -290,6 +290,7 @@
             
             let rowCount = 0;
             const maxRows = 90;
+            const visibleRows = 5; // Always show latest 5 records
             let currentInputMode = 'start'; // start, out-time, in-time
             let currentRowIndex = 0; // Track which row we're currently working on
             let timerStartTime = null;
@@ -297,22 +298,13 @@
             let elapsedSeconds = 0;
             let allRowsData = []; // Store all row data
             
-            // Initialize with empty rows
-            initializeTable();
+            // Load saved data from localStorage
+            loadSavedData();
             
             // Add event listeners
             clearAllBtn.addEventListener('click', clearAllData);
             exportBtn.addEventListener('click', exportToExcel);
             timeEnterBtn.addEventListener('click', handleTimeEnter);
-            
-            // Function to initialize table with empty rows
-            function initializeTable() {
-                // Add initial empty rows
-                for (let i = 0; i < 10; i++) {
-                    addNewRow();
-                }
-                refreshTableDisplay();
-            }
             
             // Function to handle time enter button click
             function handleTimeEnter() {
@@ -394,16 +386,28 @@
                 });
                 
                 rowCount++;
-                rowCountInfo.textContent = `Total records: ${rowCount}`;
+                updateRowCountInfo();
             }
             
-            // Function to refresh table display (show ALL records)
+            // Function to update row count info
+            function updateRowCountInfo() {
+                const filledRows = allRowsData.filter(row => 
+                    row.vehicleNumber || row.inTime || row.outTime
+                ).length;
+                rowCountInfo.textContent = `Showing latest ${Math.min(visibleRows, filledRows)} of ${filledRows} records`;
+            }
+            
+            // Function to refresh table display (show only latest 5 records)
             function refreshTableDisplay() {
                 // Clear the table body
                 tableBody.innerHTML = '';
                 
-                // Add ALL rows to table
-                for (let i = 0; i < rowCount; i++) {
+                // Calculate which rows to show (latest 5)
+                const startIndex = Math.max(0, rowCount - visibleRows);
+                const endIndex = rowCount;
+                
+                // Add rows to table (only latest 5)
+                for (let i = startIndex; i < endIndex; i++) {
                     const rowData = allRowsData[i];
                     const row = document.createElement('tr');
                     
@@ -442,8 +446,12 @@
                     const activeRow = tableBody.querySelector('.active-row');
                     if (activeRow) {
                         activeRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    } else {
+                        tableContainer.scrollTop = tableContainer.scrollHeight;
                     }
                 }, 100);
+                
+                updateRowCountInfo();
             }
             
             // Function to add event listeners to input fields
@@ -605,7 +613,6 @@
                     }
                     
                     refreshTableDisplay();
-                    rowCountInfo.textContent = `Total records: ${rowCount}`;
                     
                     // Set appropriate mode based on existing data
                     if (rowCount > 0) {
@@ -625,11 +632,14 @@
                             startTimer();
                         }
                     }
+                } else {
+                    // Initialize with 5 empty rows
+                    for (let i = 0; i < visibleRows; i++) {
+                        addNewRow();
+                    }
+                    refreshTableDisplay();
                 }
             }
-            
-            // Call load saved data
-            loadSavedData();
             
             // Function to clear all data
             function clearAllData() {
@@ -648,7 +658,6 @@
                     timeEnterBtn.textContent = 'START & RECORD FIRST IN TIME (00:00)';
                     timeEnterBtn.classList.remove('out-time-mode', 'running', 'in-time-mode');
                     stopwatchDisplay.textContent = '00:00';
-                    rowCountInfo.textContent = 'Total records: 0';
                     
                     localStorage.removeItem('vehicleTimeData');
                     localStorage.removeItem('vehicleTimeRowCount');
@@ -656,8 +665,11 @@
                     localStorage.removeItem('vehicleTimeLastSaved');
                     lastSavedSpan.textContent = 'Never';
                     
-                    // Re-initialize with empty rows
-                    initializeTable();
+                    // Re-initialize with 5 empty rows
+                    for (let i = 0; i < visibleRows; i++) {
+                        addNewRow();
+                    }
+                    refreshTableDisplay();
                 }
             }
             
